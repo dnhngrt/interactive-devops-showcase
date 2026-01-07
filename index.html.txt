@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevOps Case Study | Zero-Downtime Architecture</title>
+    <meta name="description" content="Engineering Case Study: Automating CI/CD pipelines and achieving zero-downtime deployment for high-scale SaaS applications.">
+    
+    <!-- Fonts: Inter (UI) & JetBrains Mono (Code) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* --- 1. DESIGN VARIABLES --- */
+        :root {
+            --bg-deep: #020617;       /* Darker Slate */
+            --bg-glass: rgba(15, 23, 42, 0.6);
+            --border-glass: rgba(255, 255, 255, 0.06);
+            
+            --primary: #3b82f6;       /* Blue */
+            --accent: #8b5cf6;        /* Violet */
+            --success: #10b981;       /* Emerald */
+            --danger: #ef4444;        /* Red */
+            
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            
+            --glow-primary: 0 0 40px rgba(59, 130, 246, 0.15);
+        }
+
+        /* --- 2. BASE STYLES --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-deep); }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+        /* --- 3. PARALLAX BACKGROUND --- */
+        .parallax-wrapper {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; pointer-events: none; overflow: hidden;
+        }
+        
+        .grid-bg {
+            position: absolute; width: 200%; height: 200%; top: -50%; left: -50%;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 80px 80px;
+            transform: perspective(500px) rotateX(60deg);
+            opacity: 0.5;
+        }
+
+        .glow-spot {
+            position: absolute; width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+            border-radius: 50%; filter: blur(50px);
+        }
+
+        .floating-icon {
+            position: absolute; color: white; opacity: 0.03; font-size: 3rem;
+            transition: transform 0.1s ease-out;
+        }
+
+        /* --- 4. UTILITIES --- */
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 2; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .text-gradient {
+            background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* --- 5. COMPONENT: GLASS CARD --- */
+        .glass-card {
+            background: var(--bg-glass);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            padding: 40px; border-radius: 24px;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative; overflow: hidden;
+        }
+        
+        .glass-card::after {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(800px circle at var(--mouse-x) var(--mouse-y), rgba(255,255,255,0.06), transparent 40%);
+            opacity: 0; transition: opacity 0.5s; pointer-events: none;
+        }
+        
+        .glass-card:hover::after { opacity: 1; }
+        .glass-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5);
+        }
+
+        /* --- 6. HERO SECTION --- */
+        header {
+            min-height: 100vh;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; padding: 60px 0;
+        }
+
+        /* Animated Pipeline 2.0 */
+        .pipeline-container {
+            display: flex; gap: 4px; align-items: center; justify-content: center;
+            margin-bottom: 40px; padding: 20px;
+            background: rgba(255,255,255,0.02); border-radius: 100px; border: 1px solid var(--border-glass);
+        }
+        
+        .pipe-node {
+            width: 50px; height: 50px; border-radius: 50%;
+            background: #0f172a; border: 1px solid #334155;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-muted); transition: 0.3s;
+        }
+        .pipe-node.active { border-color: var(--primary); color: var(--primary); box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); }
+        
+        .pipe-link {
+            width: 60px; height: 2px; background: #334155; position: relative; overflow: hidden;
+        }
+        .packet {
+            position: absolute; width: 50%; height: 100%; background: var(--primary);
+            left: -100%; animation: packetMove 2s infinite linear; box-shadow: 0 0 10px var(--primary);
+        }
+        @keyframes packetMove { 0% { left: -100%; } 100% { left: 200%; } }
+
+        h1 {
+            font-size: 3.5rem; letter-spacing: -2px; line-height: 1.1; margin-bottom: 24px; font-weight: 700;
+        }
+        .subtitle { font-size: 1.25rem; color: var(--text-muted); max-width: 600px; margin: 0 auto 40px; }
+
+        .btn-glow {
+            padding: 16px 36px; background: rgba(59, 130, 246, 0.1);
+            color: var(--primary); border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 50px; text-decoration: none; font-weight: 600;
+            transition: 0.3s; position: relative; overflow: hidden;
+        }
+        .btn-glow:hover {
+            background: var(--primary); color: #fff;
+            box-shadow: 0 0 40px rgba(59, 130, 246, 0.5);
+        }
+
+        /* --- 7. CONTENT SECTIONS --- */
+        section { padding: 100px 0; }
+        
+        .section-header { margin-bottom: 60px; text-align: center; }
+        .tag { 
+            font-size: 0.8rem; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; 
+            margin-bottom: 10px; display: block; font-weight: 700;
+        }
+        
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+
+        .icon-circle {
+            width: 60px; height: 60px; border-radius: 16px; background: rgba(255,255,255,0.03);
+            display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
+            margin-bottom: 24px; border: 1px solid var(--border-glass);
+        }
+
+        /* Architecture Diagram (CSS styled) */
+        .arch-diagram {
+            padding: 40px; border: 1px dashed var(--border-glass); border-radius: 20px;
+            background: rgba(2, 6, 23, 0.5);
+        }
+        .flow-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; }
+        .flow-item {
+            text-align: center; padding: 15px 25px; border-radius: 12px;
+            background: #1e293b; border: 1px solid var(--border-glass); min-width: 120px;
+        }
+
+        /* Results Metrics */
+        .metric-card { text-align: center; border-top: 3px solid transparent; }
+        .metric-big { font-size: 4rem; font-weight: 800; line-height: 1; margin-bottom: 10px; }
+        
+        /* --- 8. FOOTER --- */
+        footer {
+            padding: 80px 0; border-top: 1px solid var(--border-glass);
+            text-align: center; color: var(--text-muted); font-size: 0.9rem;
+        }
+        .socials a { color: var(--text-muted); font-size: 1.5rem; margin: 0 15px; transition: 0.3s; }
+        .socials a:hover { color: var(--primary); transform: scale(1.1); }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            h1 { font-size: 2.5rem; }
+            .grid-2 { grid-template-columns: 1fr; }
+            .flow-row { flex-direction: column; }
+            .fa-arrow-right { transform: rotate(90deg); margin: 10px 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- PARALLAX BACKGROUND LAYER -->
+    <div class="parallax-wrapper">
+        <div class="grid-bg"></div>
+        <div class="glow-spot" style="top: -10%; left: -10%;"></div>
+        <div class="glow-spot" style="bottom: -10%; right: -10%; background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%);"></div>
+        
+        <!-- Floating Icons (Parallax Targets) -->
+        <i class="fa-brands fa-docker floating-icon" data-speed="2" style="top: 20%; left: 10%;"></i>
+        <i class="fa-brands fa-github floating-icon" data-speed="-2" style="top: 15%; right: 15%;"></i>
+        <i class="fa-solid fa-server floating-icon" data-speed="1" style="bottom: 25%; left: 20%;"></i>
+        <i class="fa-solid fa-code-branch floating-icon" data-speed="-1" style="bottom: 15%; right: 10%;"></i>
+    </div>
+
+    <div class="container">
+        
+        <!-- HERO SECTION -->
+        <header>
+            <div class="pipeline-container">
+                <div class="pipe-node active"><i class="fa-solid fa-code"></i></div>
+                <div class="pipe-link"><div class="packet"></div></div>
+                <div class="pipe-node active"><i class="fa-brands fa-docker"></i></div>
+                <div class="pipe-link"><div class="packet" style="animation-delay: 0.7s"></div></div>
+                <div class="pipe-node active"><i class="fa-solid fa-vial"></i></div>
+                <div class="pipe-link"><div class="packet" style="animation-delay: 1.4s"></div></div>
+                <div class="pipe-node active" style="color: var(--success); border-color: var(--success);"><i class="fa-solid fa-rocket"></i></div>
+            </div>
+
+            <span class="mono tag">ENGINEERING CASE STUDY</span>
+            <h1>Automated CI/CD & <br><span class="text-gradient">Zero-Downtime Deployment</span></h1>
+            <p class="subtitle">
+                A deep dive into migrating a legacy manual workflow into a resilient, high-availability DevOps architecture.
+            </p>
+            <a href="#architecture" class="btn-glow">Explore Architecture</a>
+        </header>
+
+        <!-- PROBLEM SECTION -->
+        <section id="problem">
+            <div class="section-header">
+                <h2 class="text-gradient" style="font-size: 2.5rem; font-weight: 700;">The Challenge</h2>
+                <p style="color: var(--text-muted);">Identifying the bottlenecks hindering scale.</p>
+            </div>
+            
+            <div class="grid-3">
+                <div class="glass-card">
+                    <div class="icon-circle" style="color: var(--danger); border-color: rgba(239,68,68,0.3);"><i class="fa-solid fa-bug"></i></div>
+                    <h3>Fragile Deployments</h3>
+                    <p style="margin-top: 15px; color: var(--text-muted); font-size: 0.95rem;">
+                        Manual SSH/FTP uploads led to "it works on my machine" syndrome and version conflicts in production.
+                    </p>
+                </div>
+                <div class="glass-card">
+                    <div class="icon-circle" style="color: #f59e0b; border-color: rgba(245,158,11,0.3);"><i class="fa-solid fa-hourglass-start"></i></div>
+                    <h3>Costly Downtime</h3>
+                    <p style="margin-top: 15px; color: var(--text-muted); font-size: 0.95rem;">
+                        Users experienced 15-30 minutes of "Service Unavailable" screens during every update cycle.
+                    </p>
+                </div>
+                <div class="glass-card">
+                    <div class="icon-circle" style="color: var(--text-muted); border-color: rgba(148,163,184,0.3);"><i class="fa-solid fa-eye-slash"></i></div>
+                    <h3>Blind Spots</h3>
+                    <p style="margin-top: 15px; color: var(--text-muted); font-size: 0.95rem;">
+                        Lack of monitoring meant relying on customer support tickets to detect server crashes.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ARCHITECTURE / SOLUTION -->
+        <section id="architecture">
+            <div class="grid-2">
+                <div>
+                    <span class="mono tag" style="color: var(--primary);">THE SOLUTION</span>
+                    <h2 style="font-size: 2.5rem; margin-bottom: 20px; font-weight: 700;">Infrastructure as Code</h2>
+                    <p style="color: var(--text-muted); margin-bottom: 30px;">
+                        We implemented a fully automated pipeline using <strong>GitHub Actions</strong> to orchestrate Docker builds. Traffic is managed via <strong>Nginx</strong> using a Blue-Green deployment strategy to ensure zero downtime.
+                    </p>
+                    <ul class="mono" style="color: var(--text-muted); font-size: 0.9rem; list-style: none;">
+                        <li style="margin-bottom: 10px;"><i class="fa-solid fa-check" style="color: var(--success); margin-right: 10px;"></i>Automated Testing</li>
+                        <li style="margin-bottom: 10px;"><i class="fa-solid fa-check" style="color: var(--success); margin-right: 10px;"></i>Container Isolation</li>
+                        <li style="margin-bottom: 10px;"><i class="fa-solid fa-check" style="color: var(--success); margin-right: 10px;"></i>Real-time Monitoring</li>
+                    </ul>
+                </div>
+
+                <div class="arch-diagram glass-card">
+                    <div class="flow-row">
+                        <div class="flow-item">
+                            <i class="fa-brands fa-git-alt" style="font-size: 1.5rem; color: #f97316;"></i><br>Push
+                        </div>
+                        <i class="fa-solid fa-arrow-right text-muted"></i>
+                        <div class="flow-item">
+                            <i class="fa-solid fa-gears" style="font-size: 1.5rem; color: var(--accent);"></i><br>CI Build
+                        </div>
+                        <i class="fa-solid fa-arrow-right text-muted"></i>
+                        <div class="flow-item">
+                            <i class="fa-brands fa-docker" style="font-size: 1.5rem; color: var(--primary);"></i><br>Registry
+                        </div>
+                    </div>
+                    <div style="text-align: center; margin: 20px 0;"><i class="fa-solid fa-arrow-down text-muted"></i></div>
+                    <div class="flow-item" style="width: 100%; border-color: var(--success);">
+                        <i class="fa-solid fa-server" style="font-size: 1.5rem; color: var(--success);"></i><br>
+                        <strong>Production Cluster (Blue/Green)</strong>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- RESULTS -->
+        <section id="results">
+            <div class="section-header">
+                <h2 style="font-size: 2.5rem;">Business <span style="color: var(--primary)">Impact</span></h2>
+            </div>
+            
+            <div class="grid-3">
+                <div class="glass-card metric-card" style="border-top-color: var(--success);">
+                    <div class="metric-big" style="color: var(--success);">99.9%</div>
+                    <div class="mono metric-label">UPTIME ACHIEVED</div>
+                </div>
+                <div class="glass-card metric-card" style="border-top-color: var(--primary);">
+                    <div class="metric-big" style="color: var(--primary);">15m</div>
+                    <div class="mono metric-label">DEPLOY TIME</div>
+                </div>
+                <div class="glass-card metric-card" style="border-top-color: var(--accent);">
+                    <div class="metric-big" style="color: var(--accent);">0s</div>
+                    <div class="mono metric-label">DOWNTIME</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FOOTER -->
+        <footer>
+            <div class="socials" style="margin-bottom: 30px;">
+                <a href="#"><i class="fa-brands fa-github"></i></a>
+                <a href="#"><i class="fa-brands fa-linkedin"></i></a>
+                <a href="#"><i class="fa-solid fa-envelope"></i></a>
+            </div>
+            <p class="mono" style="opacity: 0.5;">&copy; 2026 DevOps Case Study. Crafted with Precision.</p>
+        </footer>
+
+    </div>
+
+    <!-- JAVASCRIPT: PARALLAX & INTERACTIONS -->
+    <script>
+        // 1. Mouse Parallax Effect for Background Icons
+        document.addEventListener('mousemove', (e) => {
+            const icons = document.querySelectorAll('.floating-icon');
+            const x = (window.innerWidth - e.pageX * 2) / 100;
+            const y = (window.innerHeight - e.pageY * 2) / 100;
+
+            icons.forEach(icon => {
+                const speed = icon.getAttribute('data-speed');
+                icon.style.transform = `translate(${x * speed}px, ${y * speed}px)`;
+            });
+        });
+
+        // 2. Mouse Glow Effect on Cards
+        document.querySelectorAll('.glass-card').forEach(card => {
+            card.addEventListener('mousemove', e => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                card.style.setProperty('--mouse-x', `${x}px`);
+                card.style.setProperty('--mouse-y', `${y}px`);
+            });
+        });
+
+        // 3. Scroll Reveal Animation
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.glass-card, h2, .subtitle').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(30px)';
+            el.style.transition = 'all 0.8s ease-out';
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>
